@@ -1,0 +1,453 @@
+<script>
+  let BOOTSTRAP = { properties: [], counts: {} };
+  let CURRENT_PROPERTY_ID = "";
+
+  document.addEventListener("DOMContentLoaded", () => {
+    bindNav();
+    bindSearchInput();
+    loadBootstrap();
+  });
+
+  function bindNav() {
+    document.querySelectorAll(".nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const viewName = btn.dataset.view;
+
+        if (viewName === "new-property") {
+          resetPropertyForm();
+        }
+
+        switchView(viewName);
+      });
+    });
+  }
+
+  function bindSearchInput() {
+    const input = document.getElementById("search-input");
+    if (!input) return;
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        runSearch();
+      }
+    });
+  }
+
+  function switchView(viewName) {
+    document
+      .querySelectorAll(".view-section")
+      .forEach((el) => el.classList.add("hidden"));
+    document
+      .querySelectorAll(".nav-btn")
+      .forEach((el) => el.classList.remove("is-active"));
+
+    const section = document.getElementById(`view-${viewName}`);
+    if (section) section.classList.remove("hidden");
+
+    const nav = document.querySelector(`.nav-btn[data-view="${viewName}"]`);
+    if (nav) nav.classList.add("is-active");
+  }
+
+  function loadBootstrap() {
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (!response.success) {
+          toast(response.message || "No fue posible cargar la app.");
+          return;
+        }
+
+        BOOTSTRAP = response.data || { properties: [], counts: {} };
+        document.getElementById("current-user").textContent =
+          BOOTSTRAP.userEmail || "-";
+        renderDashboard(BOOTSTRAP.properties || []);
+        renderProperties(BOOTSTRAP.properties || []);
+      })
+      .withFailureHandler((err) =>
+        toast(err.message || "Error de carga inicial"),
+      )
+      .getBootstrapData();
+  }
+
+  function renderDashboard(items) {
+    const available = items.filter((x) =>
+      String(x.estado_propiedad || "")
+        .toLowerCase()
+        .includes("disponible"),
+    ).length;
+    const rented = items.filter((x) =>
+      String(x.estado_propiedad || "")
+        .toLowerCase()
+        .includes("arrendada"),
+    ).length;
+    const sale = items.filter((x) =>
+      String(x.destino || "")
+        .toLowerCase()
+        .includes("venta"),
+    ).length;
+
+    document.getElementById("count-properties").textContent = items.length;
+    document.getElementById("count-available").textContent = available;
+    document.getElementById("count-rented").textContent = rented;
+    document.getElementById("count-sale").textContent = sale;
+
+    const container = document.getElementById("dashboard-list");
+    container.innerHTML = "";
+
+    if (!items.length) {
+      container.innerHTML = `<p class="text-sm text-stone-500">Aún no hay propiedades registradas.</p>`;
+      return;
+    }
+
+    items.slice(0, 5).forEach((item) => {
+      container.appendChild(buildPropertyNode(item));
+    });
+  }
+
+  function renderProperties(items) {
+    const container = document.getElementById("properties-list");
+    container.innerHTML = "";
+
+    if (!items.length) {
+      container.innerHTML = `<div class="card-soft p-5 text-sm text-stone-500">No se encontraron propiedades.</div>`;
+      return;
+    }
+
+    items.forEach((item) => {
+      container.appendChild(buildPropertyNode(item));
+    });
+  }
+
+  function buildPropertyNode(item) {
+    const div = document.createElement("div");
+    div.className = "property-row";
+    div.innerHTML = `
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+        <div>
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <span class="badge badge-teal">${escapeHtml(item.estado_propiedad || "Sin estado")}</span>
+            <span class="badge badge-stone">${escapeHtml(item.destino || "-")}</span>
+          </div>
+          <h4 class="text-lg font-semibold text-stone-800">${escapeHtml(item.nombre_propiedad || "-")}</h4>
+          <p class="text-sm text-stone-500 mt-1">${escapeHtml(item.codigo_propiedad || "-")} · ${escapeHtml(item.direccion || "-")} · ${escapeHtml(item.comuna || "-")}</p>
+        </div>
+        <div class="text-left lg:text-right">
+          <p class="text-xs uppercase tracking-wide text-stone-400">Canon mensual</p>
+          <p class="text-xl font-semibold">${formatCurrency(item.canon_mensual)}</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <button class="btn-secondary inline-flex" type="button" onclick="viewPropertyDetail('${escapeJs(item.property_id)}')">Ver detalle</button>
+        <button class="btn-primary inline-flex" type="button" onclick="editProperty('${escapeJs(item.property_id)}')">Editar</button>
+        ${item.drive_folder_url ? `<a class="btn-secondary inline-flex" href="${item.drive_folder_url}" target="_blank">Abrir carpeta Drive</a>` : ""}
+      </div>
+    `;
+    return div;
+  }
+
+  function submitProperty(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const payload = Object.fromEntries(new FormData(form).entries());
+    const status = document.getElementById("form-status");
+    const btn = document.getElementById("submit-btn");
+    const isEdit = Boolean((payload.property_id || "").trim());
+
+    status.textContent = isEdit
+      ? "Guardando cambios..."
+      : "Creando propiedad y carpeta...";
+
+    btn.disabled = true;
+
+    const runner = google.script.run
+      .withSuccessHandler((response) => {
+        btn.disabled = false;
+
+        if (!response.success) {
+          status.textContent =
+            response.message ||
+            (isEdit
+              ? "No fue posible actualizar la propiedad."
+              : "No fue posible crear la propiedad.");
+          return;
+        }
+
+        status.textContent = isEdit
+          ? "Propiedad actualizada correctamente."
+          : "Propiedad creada correctamente.";
+
+        loadBootstrap();
+
+        const propertyId = response?.data?.property_id || "";
+        if (propertyId) {
+          viewPropertyDetail(propertyId);
+        } else {
+          resetPropertyForm();
+          switchView("properties");
+        }
+      })
+      .withFailureHandler((err) => {
+        btn.disabled = false;
+        status.textContent =
+          err.message ||
+          (isEdit
+            ? "Error al actualizar propiedad."
+            : "Error al crear propiedad.");
+      });
+
+    if (isEdit) {
+      runner.updateProperty(payload);
+    } else {
+      runner.createProperty(payload);
+    }
+  }
+
+  function editProperty(propertyId) {
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (!response.success) {
+          toast(response.message || "No fue posible cargar la propiedad.");
+          return;
+        }
+
+        fillPropertyForm(response.data || {});
+        switchView("new-property");
+      })
+      .withFailureHandler((err) =>
+        toast(err.message || "Error al cargar propiedad"),
+      )
+      .getPropertyById(propertyId);
+  }
+
+  function viewPropertyDetail(propertyId) {
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (!response.success) {
+          toast(response.message || "No fue posible cargar el detalle.");
+          return;
+        }
+
+        fillPropertyDetail(response.data || {});
+        switchView("property-detail");
+      })
+      .withFailureHandler((err) =>
+        toast(err.message || "Error al cargar detalle"),
+      )
+      .getPropertyById(propertyId);
+  }
+
+  function fillPropertyDetail(item) {
+    CURRENT_PROPERTY_ID = item.property_id || "";
+
+    setText("detail-title", item.nombre_propiedad || "Detalle propiedad");
+    setText(
+      "detail-subtitle",
+      [item.codigo_propiedad || "-", item.direccion || "-", item.comuna || "-"]
+        .filter(Boolean)
+        .join(" · "),
+    );
+
+    setText("detail-status", item.estado_propiedad || "Sin estado");
+    setText("detail-destino", item.destino || "-");
+    setText("detail-codigo", item.codigo_propiedad || "-");
+    setText("detail-canon", formatCurrency(item.canon_mensual));
+    setText("detail-direccion", item.direccion || "-");
+    setText("detail-comuna", item.comuna || "-");
+    setText("detail-ciudad", item.ciudad || "-");
+    setText("detail-tipo", item.tipo_propiedad || "-");
+    setText("detail-rol", item.rol_avaluo || "-");
+    setText("detail-propietario", item.propietario_id || "-");
+    setText("detail-garantia", formatCurrency(item.garantia));
+    setText("detail-gastos", formatCurrency(item.gastos_comunes_ref));
+    setText(
+      "detail-observaciones",
+      item.observaciones || "Sin observaciones registradas.",
+    );
+
+    setLink("detail-folder-link", item.drive_folder_url, "Carpeta raíz");
+    setLink(
+      "detail-docs-link",
+      item.subfolder_docs_propiedad_url,
+      "Docs propiedad",
+    );
+    setLink(
+      "detail-tenant-docs-link",
+      item.subfolder_docs_arrendatario_url,
+      "Docs arrendatario",
+    );
+    setLink("detail-fotos-link", item.subfolder_fotos_url, "Fotos");
+    setLink("detail-contracts-link", item.subfolder_contratos_url, "Contratos");
+    setLink(
+      "detail-receipts-link",
+      item.subfolder_comprobantes_url,
+      "Comprobantes / pagos",
+    );
+  }
+
+  function editCurrentProperty() {
+    if (!CURRENT_PROPERTY_ID) {
+      toast("No hay propiedad seleccionada.");
+      return;
+    }
+    editProperty(CURRENT_PROPERTY_ID);
+  }
+
+  function deleteCurrentProperty() {
+    if (!CURRENT_PROPERTY_ID) {
+      toast("No hay propiedad seleccionada.");
+      return;
+    }
+
+    const confirmed = confirm(
+      "¿Seguro que deseas eliminar este registro del sistema?\n\n" +
+        "La carpeta y archivos de Drive NO se eliminarán.",
+    );
+
+    if (!confirmed) return;
+
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (!response.success) {
+          toast(response.message || "No fue posible eliminar.");
+          return;
+        }
+
+        CURRENT_PROPERTY_ID = "";
+        loadBootstrap();
+        switchView("properties");
+        toast(
+          "Registro eliminado del sistema. La carpeta de Drive se mantuvo intacta.",
+        );
+      })
+      .withFailureHandler((err) =>
+        toast(err.message || "Error al eliminar propiedad"),
+      )
+      .deleteProperty(CURRENT_PROPERTY_ID);
+  }
+
+  function fillPropertyForm(item) {
+    const form = document.getElementById("property-form");
+
+    setFormValue(form, "property_id", item.property_id || "");
+    setFormValue(form, "nombre_propiedad", item.nombre_propiedad || "");
+    setFormValue(form, "direccion", item.direccion || "");
+    setFormValue(form, "comuna", item.comuna || "");
+    setFormValue(form, "ciudad", item.ciudad || "Santiago");
+    setFormValue(form, "tipo_propiedad", item.tipo_propiedad || "Departamento");
+    setFormValue(
+      form,
+      "estado_propiedad",
+      item.estado_propiedad || "Disponible para arriendo",
+    );
+    setFormValue(form, "destino", item.destino || "Arriendo");
+    setFormValue(form, "canon_mensual", item.canon_mensual || "");
+    setFormValue(form, "garantia", item.garantia || "");
+    setFormValue(form, "gastos_comunes_ref", item.gastos_comunes_ref || "");
+    setFormValue(form, "rol_avaluo", item.rol_avaluo || "");
+    setFormValue(form, "propietario_id", item.propietario_id || "");
+    setFormValue(form, "observaciones", item.observaciones || "");
+
+    document.getElementById("form-title").textContent = "Editar propiedad";
+    document.getElementById("form-subtitle").textContent =
+      "Actualiza los datos del registro. La carpeta de Drive existente se conserva.";
+    document.getElementById("submit-btn").textContent = "Guardar cambios";
+    document.getElementById("cancel-edit-btn").classList.remove("hidden");
+    document.getElementById("form-status").textContent =
+      `Editando: ${item.nombre_propiedad || ""}`;
+  }
+
+  function resetPropertyForm() {
+    const form = document.getElementById("property-form");
+    form.reset();
+
+    setFormValue(form, "property_id", "");
+    setFormValue(form, "ciudad", "Santiago");
+    setFormValue(form, "tipo_propiedad", "Departamento");
+    setFormValue(form, "estado_propiedad", "Disponible para arriendo");
+    setFormValue(form, "destino", "Arriendo");
+    setFormValue(form, "rol_avaluo", "");
+
+    document.getElementById("form-title").textContent = "Nueva propiedad";
+    document.getElementById("form-subtitle").textContent =
+      "Al guardar se crea la carpeta en Drive y se registra en tu Sheet.";
+    document.getElementById("submit-btn").textContent = "Crear propiedad";
+    document.getElementById("cancel-edit-btn").classList.add("hidden");
+    document.getElementById("form-status").textContent = "";
+  }
+
+  function resetPropertyFormAndGoList() {
+    resetPropertyForm();
+    switchView("properties");
+  }
+
+  function runSearch() {
+    const term = document.getElementById("search-input").value || "";
+
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (!response.success) {
+          toast(response.message || "No se pudo buscar.");
+          return;
+        }
+
+        renderProperties(response.data || []);
+      })
+      .withFailureHandler((err) => toast(err.message || "Error en búsqueda"))
+      .searchProperties(term);
+  }
+
+  function setFormValue(form, fieldName, value) {
+    const field = form.querySelector(`[name="${fieldName}"]`);
+    if (field) field.value = value;
+  }
+
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function setLink(id, href, label) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    if (href) {
+      el.href = href;
+      el.textContent = label;
+      el.classList.remove("opacity-50", "pointer-events-none");
+    } else {
+      el.href = "#";
+      el.textContent = `${label} (sin link)`;
+      el.classList.add("opacity-50", "pointer-events-none");
+    }
+  }
+
+  function formatCurrency(value) {
+    const num = Number(value || 0);
+    return new Intl.NumberFormat("es-CL", {
+      style: "currency",
+      currency: "CLP",
+      maximumFractionDigits: 0,
+    }).format(num);
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function escapeJs(value) {
+    return String(value || "")
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'");
+  }
+
+  function toast(message) {
+    alert(message);
+  }
+</script>

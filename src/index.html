@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><?= getScriptConfig().appTitle ?></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <?!= include('styles'); ?>
+  </head>
+  <body class="bg-stone-50 text-stone-800 min-h-screen">
+    <div class="min-h-screen grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+      <aside class="bg-white border-r border-stone-200 px-5 py-6 shadow-sm">
+        <div class="mb-8">
+          <p
+            class="text-xs uppercase tracking-[0.2em] text-teal-700 font-semibold"
+          >
+            MVP
+          </p>
+          <h1 class="text-2xl font-semibold text-stone-800">
+            <?= getScriptConfig().appTitle ?>
+          </h1>
+          <p class="text-sm text-stone-500 mt-2">
+            Gestión documental, propiedades y control operativo.
+          </p>
+        </div>
+
+        <nav class="space-y-2 text-sm">
+          <button
+            class="nav-btn is-active w-full text-left px-3 py-2 rounded-xl"
+            data-view="dashboard"
+          >
+            Dashboard
+          </button>
+          <button
+            class="nav-btn w-full text-left px-3 py-2 rounded-xl"
+            data-view="properties"
+          >
+            Propiedades
+          </button>
+          <button
+            class="nav-btn w-full text-left px-3 py-2 rounded-xl"
+            data-view="new-property"
+          >
+            Nueva propiedad
+          </button>
+        </nav>
+      </aside>
+
+      <main class="p-4 md:p-6 lg:p-8">
+        <section id="view-dashboard" class="view-section space-y-6">
+          <div
+            class="flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+          >
+            <div>
+              <h2 class="text-2xl font-semibold">Panel general</h2>
+              <p class="text-stone-500">Vista resumida para uso diario.</p>
+            </div>
+            <div class="text-sm text-stone-500">
+              Usuario: <span id="current-user">-</span>
+            </div>
+          </div>
+
+          <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="card-soft p-5">
+              <p class="text-sm text-stone-500">Propiedades</p>
+              <p id="count-properties" class="text-3xl font-semibold mt-2">0</p>
+            </div>
+            <div class="card-soft p-5">
+              <p class="text-sm text-stone-500">Disponibles</p>
+              <p id="count-available" class="text-3xl font-semibold mt-2">0</p>
+            </div>
+            <div class="card-soft p-5">
+              <p class="text-sm text-stone-500">Arrendadas</p>
+              <p id="count-rented" class="text-3xl font-semibold mt-2">0</p>
+            </div>
+            <div class="card-soft p-5">
+              <p class="text-sm text-stone-500">En venta</p>
+              <p id="count-sale" class="text-3xl font-semibold mt-2">0</p>
+            </div>
+          </div>
+
+          <div class="card-soft p-5">
+            <div class="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 class="text-lg font-semibold">Últimas propiedades</h3>
+                <p class="text-sm text-stone-500">
+                  Muestra rápida desde Google Sheets.
+                </p>
+              </div>
+              <button class="btn-secondary" onclick="switchView('properties')">
+                Ver listado
+              </button>
+            </div>
+            <div id="dashboard-list" class="space-y-3"></div>
+          </div>
+        </section>
+
+        <section id="view-properties" class="view-section hidden space-y-6">
+          <div
+            class="flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+          >
+            <div>
+              <h2 class="text-2xl font-semibold">Propiedades</h2>
+              <p class="text-stone-500">
+                Busca por nombre, dirección, comuna o estado.
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <input
+                id="search-input"
+                type="text"
+                placeholder="Buscar propiedad..."
+                class="input-base min-w-[260px]"
+              />
+              <button class="btn-primary" onclick="runSearch()">Buscar</button>
+            </div>
+          </div>
+
+          <div id="properties-list" class="grid gap-4"></div>
+        </section>
+
+        <section
+          id="view-property-detail"
+          class="view-section hidden space-y-6"
+        >
+          <div
+            class="flex flex-col md:flex-row md:items-start md:justify-between gap-3"
+          >
+            <div>
+              <button
+                class="btn-secondary mb-3"
+                type="button"
+                onclick="switchView('properties')"
+              >
+                ← Volver al listado
+              </button>
+              <h2 id="detail-title" class="text-2xl font-semibold">
+                Detalle propiedad
+              </h2>
+              <p id="detail-subtitle" class="text-stone-500">
+                Ficha general de la propiedad.
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="btn-primary"
+                type="button"
+                onclick="editCurrentProperty()"
+              >
+                Editar
+              </button>
+              <button
+                class="btn-danger"
+                type="button"
+                onclick="deleteCurrentProperty()"
+              >
+                Eliminar registro
+              </button>
+            </div>
+          </div>
+
+          <div class="grid xl:grid-cols-[1.2fr_0.8fr] gap-4">
+            <div class="card-soft p-5 space-y-5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span id="detail-status" class="badge badge-teal">-</span>
+                <span id="detail-destino" class="badge badge-stone">-</span>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-4">
+                <div class="detail-item">
+                  <p class="detail-label">Código</p>
+                  <p id="detail-codigo" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Canon mensual</p>
+                  <p id="detail-canon" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Dirección</p>
+                  <p id="detail-direccion" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Comuna</p>
+                  <p id="detail-comuna" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Ciudad</p>
+                  <p id="detail-ciudad" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Tipo propiedad</p>
+                  <p id="detail-tipo" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Rol avalúo</p>
+                  <p id="detail-rol" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Propietario ID</p>
+                  <p id="detail-propietario" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Garantía</p>
+                  <p id="detail-garantia" class="detail-value">-</p>
+                </div>
+                <div class="detail-item">
+                  <p class="detail-label">Gastos comunes ref.</p>
+                  <p id="detail-gastos" class="detail-value">-</p>
+                </div>
+              </div>
+
+              <div class="detail-item">
+                <p class="detail-label">Observaciones</p>
+                <p
+                  id="detail-observaciones"
+                  class="detail-value whitespace-pre-line"
+                >
+                  -
+                </p>
+              </div>
+            </div>
+
+            <div class="card-soft p-5 space-y-4">
+              <div>
+                <h3 class="text-lg font-semibold">Accesos rápidos</h3>
+                <p class="text-sm text-stone-500">
+                  Carpetas y subcarpetas asociadas.
+                </p>
+              </div>
+
+              <div class="grid gap-3">
+                <a
+                  id="detail-folder-link"
+                  class="btn-secondary text-center"
+                  href="#"
+                  target="_blank"
+                  >Carpeta raíz</a
+                >
+                <a
+                  id="detail-docs-link"
+                  class="btn-secondary text-center"
+                  href="#"
+                  target="_blank"
+                  >Docs propiedad</a
+                >
+                <a
+                  id="detail-tenant-docs-link"
+                  class="btn-secondary text-center"
+                  href="#"
+                  target="_blank"
+                  >Docs arrendatario</a
+                >
+                <a
+                  id="detail-fotos-link"
+                  class="btn-secondary text-center"
+                  href="#"
+                  target="_blank"
+                  >Fotos</a
+                >
+                <a
+                  id="detail-contracts-link"
+                  class="btn-secondary text-center"
+                  href="#"
+                  target="_blank"
+                  >Contratos</a
+                >
+                <a
+                  id="detail-receipts-link"
+                  class="btn-secondary text-center"
+                  href="#"
+                  target="_blank"
+                  >Comprobantes / pagos</a
+                >
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-new-property" class="view-section hidden space-y-6">
+          <div>
+            <h2 id="form-title" class="text-2xl font-semibold">
+              Nueva propiedad
+            </h2>
+            <p id="form-subtitle" class="text-stone-500">
+              Al guardar se crea la carpeta en Drive y se registra en tu Sheet.
+            </p>
+          </div>
+
+          <form
+            id="property-form"
+            class="card-soft p-5 grid md:grid-cols-2 gap-4"
+            onsubmit="submitProperty(event)"
+          >
+            <input type="hidden" name="property_id" id="property_id" />
+
+            <div class="md:col-span-2">
+              <label class="label-base">Nombre propiedad *</label>
+              <input
+                name="nombre_propiedad"
+                required
+                class="input-base"
+                placeholder="Ej: Depto Providencia - Torre B"
+              />
+            </div>
+
+            <div>
+              <label class="label-base">Dirección</label>
+              <input
+                name="direccion"
+                class="input-base"
+                placeholder="Ej: Av. Italia 1234"
+              />
+            </div>
+
+            <div>
+              <label class="label-base">Comuna</label>
+              <input
+                name="comuna"
+                class="input-base"
+                placeholder="Ej: Providencia"
+              />
+            </div>
+
+            <div>
+              <label class="label-base">Ciudad</label>
+              <input name="ciudad" class="input-base" value="Santiago" />
+            </div>
+
+            <div>
+              <label class="label-base">Tipo propiedad</label>
+              <select name="tipo_propiedad" class="input-base">
+                <option>Departamento</option>
+                <option>Casa</option>
+                <option>Oficina</option>
+                <option>Bodega</option>
+                <option>Local comercial</option>
+                <option>Terreno</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="label-base">Estado</label>
+              <select name="estado_propiedad" class="input-base">
+                <option>Disponible para arriendo</option>
+                <option>Disponible para venta</option>
+                <option>Arrendada</option>
+                <option>Vendida</option>
+                <option>Reservada</option>
+                <option>En trámite</option>
+                <option>Pendiente documentación</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="label-base">Destino</label>
+              <select name="destino" class="input-base">
+                <option>Arriendo</option>
+                <option>Venta</option>
+                <option>Arriendo y Venta</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="label-base">Canon mensual</label>
+              <input
+                name="canon_mensual"
+                type="number"
+                step="1"
+                class="input-base"
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <label class="label-base">Garantía</label>
+              <input
+                name="garantia"
+                type="number"
+                step="1"
+                class="input-base"
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <label class="label-base">Gastos comunes ref.</label>
+              <input
+                name="gastos_comunes_ref"
+                type="number"
+                step="1"
+                class="input-base"
+                placeholder="0"
+              />
+            </div>
+
+            <div class="md:col-span-2">
+              <label class="label-base">Rol avalúo</label>
+              <input
+                name="rol_avaluo"
+                class="input-base"
+                placeholder="Ej: 1234-56"
+              />
+            </div>
+
+            <div class="md:col-span-2">
+              <label class="label-base">Propietario ID</label>
+              <input
+                name="propietario_id"
+                class="input-base"
+                placeholder="Ej: owner_001"
+              />
+            </div>
+
+            <div class="md:col-span-2">
+              <label class="label-base">Observaciones</label>
+              <textarea
+                name="observaciones"
+                rows="4"
+                class="input-base"
+                placeholder="Notas relevantes de la propiedad"
+              ></textarea>
+            </div>
+
+            <div class="md:col-span-2 flex items-center gap-3 pt-2 flex-wrap">
+              <button id="submit-btn" type="submit" class="btn-primary">
+                Crear propiedad
+              </button>
+              <button
+                id="cancel-edit-btn"
+                type="button"
+                class="btn-secondary hidden"
+                onclick="resetPropertyFormAndGoList()"
+              >
+                Cancelar edición
+              </button>
+              <span id="form-status" class="text-sm text-stone-500"></span>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <?!= include('scripts'); ?>
+  </body>
+</html>

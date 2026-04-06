@@ -1,0 +1,16 @@
+{
+  "name": "real-estate-gas-starter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Starter para corredor de propiedades con Google Apps Script y VSCode",
+  "scripts": {
+    "login": "clasp login",
+    "push": "clasp push -f",
+    "pull": "clasp pull",
+    "open": "clasp open",
+    "deploy": "clasp deployments"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.6"
+  }
+}

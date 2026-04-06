@@ -1,0 +1,83 @@
+# =========================
+# Node
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Apps Script / clasp
+# =========================
+.clasp.json
+.clasprc.json
+
+# =========================
+# Build / temp
+# =========================
+dist/
+build/
+coverage/
+.tmp/
+temp/
+.cache/
+
+# =========================
+# Logs
+# =========================
+logs
+*.log
+
+# =========================
+# macOS
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# =========================
+# VSCode / editors
+# =========================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Python (por si usas scripts auxiliares)
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# =========================
+# Office / archivos locales molestos
+# =========================
+~$*
+*.bak
+*.tmp
+
+# =========================
+# Zip / exports locales
+# =========================
+*.zip
+*.tar
+*.gz
+
+# =========================
+# Optional: screenshots / pruebas locales
+# =========================
+screenshots/
+captures/
